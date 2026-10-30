@@ -1,192 +1,96 @@
-        val player = players[playerIndex]
-        val outer = RectF(
-            xOf(col.toFloat()) + 1f,
-            yOf(row.toFloat()) + 1f,
-            xOf((col + 6).toFloat()) - 1f,
-            yOf((row + 6).toFloat()) - 1f
-        )
-        paint.color = player.color
-        canvas.drawRoundRect(outer, cellSize * 0.22f, cellSize * 0.22f, paint)
-        val inner = RectF(
-            xOf((col + 1).toFloat()), yOf((row + 1).toFloat()),
-            xOf((col + 5).toFloat()), yOf((row + 5).toFloat())
-        )
-        paint.color = white
-        canvas.drawRoundRect(inner, cellSize * 0.18f, cellSize * 0.18f, paint)
-        paint.color = player.light
-        paint.style = Paint.Style.STROKE
-        paint.strokeWidth = 1.4f
-        canvas.drawRoundRect(inner, cellSize * 0.18f, cellSize * 0.18f, paint)
-        paint.style = Paint.Style.FILL
+package com.example.ludoplay
 
-        player.yardSlots.forEach { slot ->
-            paint.color = player.light
-            canvas.drawCircle(xOf(slot.first), yOf(slot.second), cellSize * 0.36f, paint)
-            paint.color = Color.argb(45, 0, 0, 0)
-            paint.style = Paint.Style.STROKE
-            paint.strokeWidth = 1f
-            canvas.drawCircle(xOf(slot.first), yOf(slot.second), cellSize * 0.36f, paint)
-            paint.style = Paint.Style.FILL
-        }
+import android.app.Activity
+import android.os.Bundle
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Paint
+import android.graphics.Path
+import android.graphics.RectF
+import android.graphics.Typeface
+import android.view.MotionEvent
+import android.view.View
+import kotlin.math.min
+import kotlin.random.Random
+
+class MainActivity : Activity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        window.statusBarColor = Color.rgb(243, 244, 246)
+        window.navigationBarColor = Color.rgb(243, 244, 246)
+        window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
+        setContentView(LudoView(this))
     }
+}
 
-    private fun drawCell(canvas: Canvas, cell: Cell, fill: Int) {
-        val inset = cellSize * 0.035f
-        val rect = RectF(
-            xOf(cell.col.toFloat()) + inset,
-            yOf(cell.row.toFloat()) + inset,
-            xOf(cell.col + 1f) - inset,
-            yOf(cell.row + 1f) - inset
+private data class Cell(val row: Int, val col: Int)
+private data class TokenHit(val bounds: RectF, val player: Int, val token: Int)
+
+private data class PlayerSpec(
+    val name: String,
+    val color: Int,
+    val light: Int,
+    val start: Int,
+    val lane: List<Cell>,
+    val yardSlots: List<Pair<Float, Float>>
+)
+
+private class LudoView(activity: Activity) : View(activity) {
+    private val bg = Color.rgb(243, 244, 246)
+    private val ink = Color.rgb(31, 41, 55)
+    private val muted = Color.rgb(107, 114, 128)
+    private val white = Color.WHITE
+    private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val hitBoxes = mutableListOf<TokenHit>()
+
+    private val sharedPath = listOf(
+        Cell(6, 1), Cell(6, 2), Cell(6, 3), Cell(6, 4), Cell(6, 5),
+        Cell(5, 6), Cell(4, 6), Cell(3, 6), Cell(2, 6), Cell(1, 6), Cell(0, 6),
+        Cell(0, 7), Cell(0, 8), Cell(1, 8), Cell(2, 8), Cell(3, 8), Cell(4, 8), Cell(5, 8),
+        Cell(6, 9), Cell(6, 10), Cell(6, 11), Cell(6, 12), Cell(6, 13), Cell(6, 14),
+        Cell(7, 14), Cell(8, 14), Cell(8, 13), Cell(8, 12), Cell(8, 11), Cell(8, 10), Cell(8, 9),
+        Cell(9, 8), Cell(10, 8), Cell(11, 8), Cell(12, 8), Cell(13, 8), Cell(14, 8),
+        Cell(14, 7), Cell(14, 6), Cell(13, 6), Cell(12, 6), Cell(11, 6), Cell(10, 6), Cell(9, 6),
+        Cell(8, 5), Cell(8, 4), Cell(8, 3), Cell(8, 2), Cell(8, 1), Cell(8, 0), Cell(7, 0), Cell(6, 0)
+    )
+
+    private val players = listOf(
+        PlayerSpec(
+            "Red", Color.rgb(220, 55, 65), Color.rgb(255, 218, 220), 0,
+            (0..6).map { Cell(7, it) },
+            listOf(2.1f to 2.1f, 4.0f to 2.1f, 2.1f to 4.0f, 4.0f to 4.0f)
+        ),
+        PlayerSpec(
+            "Green", Color.rgb(35, 160, 95), Color.rgb(211, 245, 225), 13,
+            (0..6).map { Cell(it, 7) },
+            listOf(11.0f to 2.1f, 12.9f to 2.1f, 11.0f to 4.0f, 12.9f to 4.0f)
+        ),
+        PlayerSpec(
+            "Blue", Color.rgb(55, 115, 220), Color.rgb(215, 230, 255), 26,
+            (14 downTo 8).map { Cell(7, it) },
+            listOf(11.0f to 11.0f, 12.9f to 11.0f, 11.0f to 12.9f, 12.9f to 12.9f)
+        ),
+        PlayerSpec(
+            "Yellow", Color.rgb(232, 176, 35), Color.rgb(255, 242, 194), 39,
+            (14 downTo 8).map { Cell(it, 7) },
+            listOf(2.1f to 11.0f, 4.0f to 11.0f, 2.1f to 12.9f, 4.0f to 12.9f)
         )
-        paint.color = fill
-        canvas.drawRect(rect, paint)
-        paint.color = Color.rgb(209, 213, 219)
-        paint.style = Paint.Style.STROKE
-        paint.strokeWidth = 0.8f
-        canvas.drawRect(rect, paint)
-        paint.style = Paint.Style.FILL
-    }
+    )
 
-    private fun drawCenter(canvas: Canvas) {
-        val left = xOf(6f)
-        val top = yOf(6f)
-        val right = xOf(9f)
-        val bottom = yOf(9f)
-        val cx = (left + right) / 2f
-        val cy = (top + bottom) / 2f
-        // Use an explicit model instead of Pair/list destructuring. This avoids
-        // Kotlin type-inference ambiguity in the cloud Gradle compiler.
-        val triangles = listOf(
-            CenterTriangle(0, floatArrayOf(left, top, left, bottom, cx, cy)),
-            CenterTriangle(1, floatArrayOf(left, top, right, top, cx, cy)),
-            CenterTriangle(2, floatArrayOf(right, top, right, bottom, cx, cy)),
-            CenterTriangle(3, floatArrayOf(left, bottom, right, bottom, cx, cy))
-        )
-        triangles.forEach { triangle ->
-            val points = triangle.points
-            val path = Path().apply {
-                moveTo(points[0], points[1])
-                lineTo(points[2], points[3])
-                lineTo(points[4], points[5])
-                close()
-            }
-            paint.color = players[triangle.playerIndex].color
-            canvas.drawPath(path, paint)
-        }
-        paint.color = white
-        canvas.drawCircle(cx, cy, cellSize * 0.10f, paint)
-        paint.color = Color.rgb(209, 213, 219)
-        paint.style = Paint.Style.STROKE
-        paint.strokeWidth = 1f
-        canvas.drawRect(left, top, right, bottom, paint)
-        paint.style = Paint.Style.FILL
-    }
+    // -1 = yard, 0..51 = shared track, 52..58 = home lane, 59 = finished.
+    private val tokenProgress = Array(4) { IntArray(4) { -1 } }
+    private var playerCount = 4
+    private var turnOrder = listOf(0, 1, 2, 3)
+    private var turnPointer = 0
+    private var diceValue: Int? = null
+    private var hasRolled = false
+    private var winner: Int? = null
+    private var status = "Red's turn — roll the dice"
+    private var waitingForPass = false
+    private var pendingPass: Runnable? = null
 
-    private fun drawTokens(canvas: Canvas) {
-        hitBoxes.clear()
-        val visiblePlayers = turnOrder.toSet()
-        for (playerIndex in players.indices) {
-            if (!visiblePlayers.contains(playerIndex)) continue
-            for (tokenIndex in 0 until 4) {
-                val progress = tokenProgress[playerIndex][tokenIndex]
-                val position = tokenPosition(playerIndex, tokenIndex)
-                val offset = stackOffset(playerIndex, tokenIndex)
-                val cx = xOf(position.first + offset.first)
-                val cy = yOf(position.second + offset.second)
-                val radius = cellSize * if (progress == -1) 0.32f else 0.34f
-
-                if (progress == -1) {
-                    paint.color = players[playerIndex].color
-                    paint.style = Paint.Style.STROKE
-                    paint.strokeWidth = 2f
-                    canvas.drawCircle(cx, cy, radius + 1.2f, paint)
-                    paint.style = Paint.Style.FILL
-                }
-
-                paint.color = Color.argb(45, 0, 0, 0)
-                canvas.drawCircle(cx + 1f, cy + 2f, radius, paint)
-                paint.color = players[playerIndex].color
-                canvas.drawCircle(cx, cy, radius, paint)
-                paint.color = white
-                canvas.drawCircle(cx - radius * 0.22f, cy - radius * 0.24f, radius * 0.19f, paint)
-                paint.color = Color.argb(65, 0, 0, 0)
-                paint.style = Paint.Style.STROKE
-                paint.strokeWidth = 1f
-                canvas.drawCircle(cx, cy, radius, paint)
-                paint.style = Paint.Style.FILL
-
-                val canSelect = winner == null && hasRolled && playerIndex == currentPlayer() && visiblePlayers.contains(playerIndex) && isMovable(playerIndex, tokenIndex)
-                if (canSelect) {
-                    paint.color = Color.rgb(17, 24, 39)
-                    paint.style = Paint.Style.STROKE
-                    paint.strokeWidth = 2f
-                    canvas.drawCircle(cx, cy, radius + 3f, paint)
-                    paint.style = Paint.Style.FILL
-                }
-                hitBoxes.add(TokenHit(RectF(cx - radius * 1.5f, cy - radius * 1.5f, cx + radius * 1.5f, cy + radius * 1.5f), playerIndex, tokenIndex))
-            }
-        }
-    }
-
-    private fun drawControls(canvas: Canvas) {
-        val panelTop = boardTop + boardSize + 13f
-        val panel = RectF(16f, panelTop, viewWidth - 16f, viewHeight - 14f)
-        paint.color = white
-        canvas.drawRoundRect(panel, 20f, 20f, paint)
-        paint.color = Color.rgb(229, 231, 235)
-        paint.style = Paint.Style.STROKE
-        paint.strokeWidth = 1f
-        canvas.drawRoundRect(panel, 20f, 20f, paint)
-        paint.style = Paint.Style.FILL
-
-        val title = when {
-            winner != null -> "${players[winner!!].name} wins! 🎉"
-            else -> status
-        }
-        drawTextCentered(canvas, title, viewWidth / 2f, panelTop + 31f, 15f, ink, true)
-        drawTextCentered(
-            canvas,
-            if (hasRolled) "Choose one of the outlined tokens" else "Pass the phone after your turn",
-            viewWidth / 2f, panelTop + 51f, 10f, muted, false
-        )
-
-        diceCenterX = viewWidth / 2f
-        diceCenterY = panelTop + 101f
-        val diceRect = RectF(diceCenterX - 29f, diceCenterY - 29f, diceCenterX + 29f, diceCenterY + 29f)
-        paint.color = Color.rgb(249, 250, 251)
-        canvas.drawRoundRect(diceRect, 13f, 13f, paint)
-        paint.color = Color.rgb(203, 213, 225)
-        paint.style = Paint.Style.STROKE
-        paint.strokeWidth = 1.2f
-        canvas.drawRoundRect(diceRect, 13f, 13f, paint)
-        paint.style = Paint.Style.FILL
-        drawDice(canvas, diceCenterX, diceCenterY, diceValue ?: 1)
-
-        rollRect = RectF(viewWidth / 2f - 82f, panelTop + 143f, viewWidth / 2f + 82f, panelTop + 188f)
-        val buttonEnabled = winner == null && !hasRolled && !waitingForPass
-        drawPill(canvas, rollRect, if (buttonEnabled) Color.rgb(79, 70, 229) else Color.rgb(165, 160, 220), Color.TRANSPARENT)
-        drawTextCentered(
-            canvas,
-            when {
-                winner != null -> "GAME FINISHED"
-                hasRolled -> "SELECT A TOKEN"
-                else -> "ROLL DICE"
-            },
-            rollRect.centerX(), rollRect.centerY() + 4f, 13f, white, true
-        )
-        if (winner != null) {
-            drawTextCentered(canvas, "Tap NEW GAME to play again", viewWidth / 2f, panel.bottom - 12f, 10f, muted, false)
-        }
-    }
-
-    private fun drawDice(canvas: Canvas, cx: Float, cy: Float, value: Int) {
-        val pip = Color.rgb(31, 41, 55)
-        val d = 9f
-        val positions = when (value) {
-            1 -> listOf(0f to 0f)
-            2 -> listOf(-1f to -1f, 1f to 1f)
-            3 -> listOf(-1f to -1f, 0f to 0f, 1f to 1f)
-            4 -> listOf(-1f to -1f, 1f to -1f, -1f to 1f, 1f to 1f)
-            5 -> listOf(-1f to -1f, 1f to -1f, 0f to 0f, -1f to 1f, 1f to 1f)
-            else -> listOf(-1f to -1f, 1f to -1f, -1f to 0f, 1f to 0f, -1f to 1f, 1f to 1f)
-        }
+    private var density = resources.displayMetrics.density
+    private var viewWidth = 0f
+    private var viewHeight = 0f
+    private var boardLeft = 0f
+    private var boardTop = 0f
